@@ -1,13 +1,24 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
+import openai
+import random
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Load OpenAI API key from environment variable
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
 # Sample Data
 movies = pd.DataFrame({
-    'movieId': [1, 2, 3, 4, 5],
-    'title': ['Toy Story', 'Jumanji', 'Grumpier Old Men', 'Waiting to Exhale', 'Father of the Bride Part II'],
-    'genres': ['Animation|Children|Comedy', 'Adventure|Children|Fantasy', 'Comedy|Romance', 'Comedy|Drama|Romance', 'Comedy']
+    'movieId': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    'title': ['Toy Story', 'Jumanji', 'Grumpier Old Men', 'Waiting to Exhale', 'Father of the Bride Part II',
+              'Heat', 'Sabrina', 'Tom and Huck', 'Sudden Death', 'GoldenEye'],
+    'genres': ['Animation|Children|Comedy', 'Adventure|Children|Fantasy', 'Comedy|Romance', 'Comedy|Drama|Romance', 'Comedy',
+               'Action|Crime|Drama', 'Comedy|Romance', 'Adventure|Children', 'Action', 'Action|Adventure|Thriller']
 })
 
 ratings = pd.DataFrame({
@@ -16,31 +27,29 @@ ratings = pd.DataFrame({
     'rating': [5, 4, 3, 4, 5, 2, 3, 4, 5, 2, 4, 4]
 })
 
-# Movie Recommendation System using Collaborative Filtering
-def get_movie_recommendations(user_ratings, movies, ratings):
-    # Create a pivot table
-    movie_ratings = ratings.pivot(index='userId', columns='movieId', values='rating')
+# Fetch random top-rated movies for rating
+def get_random_top_rated_movies(movies, num=5):
+    top_rated_movies = movies.sample(n=num)
+    return top_rated_movies
+
+# Generate recommendations using OpenAI GPT API
+def get_gpt_recommendations(user_ratings, movies):
+    prompt = "Based on these movie ratings, suggest other movies the user might like:\n"
+    for _, row in user_ratings.iterrows():
+        movie_title = movies[movies['movieId'] == row['movieId']]['title'].values[0]
+        prompt += f"{movie_title}: {row['rating']}\n"
     
-    # Add new user ratings to the movie ratings DataFrame
-    for i, row in user_ratings.iterrows():
-        movie_ratings.loc[row['userId'], row['movieId']] = row['rating']
+    response = openai.Completion.create(
+        engine="text-davinci-003",
+        prompt=prompt,
+        max_tokens=100,
+        n=1,
+        stop=None,
+        temperature=0.7,
+    )
     
-    # Calculate similarity between users
-    user_similarity = cosine_similarity(movie_ratings.fillna(0))
-    user_similarity_df = pd.DataFrame(user_similarity, index=movie_ratings.index, columns=movie_ratings.index)
-    
-    # Get the similarities for the new user
-    new_user_similarities = user_similarity_df.loc[999]
-    
-    # Calculate weighted ratings
-    weighted_ratings = movie_ratings.T.dot(new_user_similarities) / np.array([np.abs(new_user_similarities).sum(axis=0)])
-    
-    # Exclude movies already rated by the new user
-    rated_movies = user_ratings['movieId'].values
-    recommendations = weighted_ratings[~weighted_ratings.index.isin(rated_movies)]
-    recommendations = recommendations.sort_values(ascending=False).head(10)
-    
-    return movies[movies['movieId'].isin(recommendations.index)]
+    recommendations = response.choices[0].text.strip().split("\n")
+    return recommendations
 
 # Streamlit Interface
 def main():
@@ -48,21 +57,23 @@ def main():
     
     st.header('Rate Movies')
     
+    # Fetch random movies for rating
+    random_movies = get_random_top_rated_movies(movies)
+    
     # User Input
     user_ratings = []
-    for i, row in movies.iterrows():
+    for i, row in random_movies.iterrows():
         rating = st.slider(f"Rate {row['title']}", 0, 5, 0)
         if rating > 0:
             user_ratings.append({'userId': 999, 'movieId': row['movieId'], 'rating': rating})
     
     if st.button('Get Recommendations'):
         user_ratings_df = pd.DataFrame(user_ratings)
-        recommendations = get_movie_recommendations(user_ratings_df, movies, ratings)
+        recommendations = get_gpt_recommendations(user_ratings_df, movies)
         
         st.header('Recommended Movies')
-        for i, row in recommendations.iterrows():
-            st.subheader(row['title'])
-            st.text(row['genres'])
+        for recommendation in recommendations:
+            st.subheader(recommendation)
     
     st.header('Feedback')
     st.text('Did you like the recommendations?')
@@ -73,4 +84,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
