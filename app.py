@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 # Sample Data
 movies = pd.DataFrame({
@@ -22,22 +21,26 @@ def get_movie_recommendations(user_ratings, movies, ratings):
     # Create a pivot table
     movie_ratings = ratings.pivot(index='userId', columns='movieId', values='rating')
     
+    # Add new user ratings to the movie ratings DataFrame
+    for i, row in user_ratings.iterrows():
+        movie_ratings.loc[row['userId'], row['movieId']] = row['rating']
+    
     # Calculate similarity between users
     user_similarity = cosine_similarity(movie_ratings.fillna(0))
     user_similarity_df = pd.DataFrame(user_similarity, index=movie_ratings.index, columns=movie_ratings.index)
     
-    # Find similar users
-    user_similarities = user_similarity_df[user_ratings['userId']]
+    # Get the similarities for the new user
+    new_user_similarities = user_similarity_df.loc[999]
     
     # Calculate weighted ratings
-    weighted_ratings = movie_ratings.mul(user_similarities, axis=0)
-    recommendation_scores = weighted_ratings.sum(axis=1) / user_similarities.sum()
+    weighted_ratings = movie_ratings.T.dot(new_user_similarities) / np.array([np.abs(new_user_similarities).sum(axis=0)])
     
-    # Get recommendations for movies not yet rated by the user
-    recommended_movies = recommendation_scores[~recommendation_scores.index.isin(user_ratings['movieId'])]
-    recommended_movies = recommended_movies.sort_values(ascending=False).head(10)
+    # Exclude movies already rated by the new user
+    rated_movies = user_ratings['movieId'].values
+    recommendations = weighted_ratings[~weighted_ratings.index.isin(rated_movies)]
+    recommendations = recommendations.sort_values(ascending=False).head(10)
     
-    return movies[movies['movieId'].isin(recommended_movies.index)]
+    return movies[movies['movieId'].isin(recommendations.index)]
 
 # Streamlit Interface
 def main():
@@ -70,3 +73,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
