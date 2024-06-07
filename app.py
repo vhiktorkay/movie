@@ -39,16 +39,15 @@ def get_gpt_recommendations(user_ratings, movies):
         movie_title = movies[movies['movieId'] == row['movieId']]['title'].values[0]
         prompt += f"{movie_title}: {row['rating']}\n"
     
-    response = openai.Completion.create(
-        engine="text-davinci-003",
-        prompt=prompt,
-        max_tokens=100,
-        n=1,
-        stop=None,
-        temperature=0.7,
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a movie recommendation assistant."},
+            {"role": "user", "content": prompt}
+        ]
     )
     
-    recommendations = response.choices[0].text.strip().split("\n")
+    recommendations = response.choices[0].message['content'].strip().split("\n")
     return recommendations
 
 # Streamlit Interface
