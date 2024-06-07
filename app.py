@@ -6,7 +6,7 @@ import random
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables from .env file (if running locally)
 load_dotenv()
 
 # Load OpenAI API key from environment variable
