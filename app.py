@@ -47,7 +47,7 @@ def get_gpt_recommendations(user_ratings, movies):
         ]
     )
     
-    recommendations = response.choices[0].message['content'].strip().split("\n")
+    recommendations = response['choices'][0]['message']['content'].strip().split("\n")
     return recommendations
 
 # Streamlit Interface
